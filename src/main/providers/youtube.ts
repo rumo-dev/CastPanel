@@ -9,7 +9,7 @@ const observe = `(() => {
  const scan=()=>document.querySelectorAll('yt-live-chat-text-message-renderer,yt-live-chat-paid-message-renderer,yt-live-chat-paid-sticker-renderer,yt-live-chat-membership-item-renderer').forEach(el=>{
  const id=el.id;if(!id||seen.has(id))return;seen.add(id);if(seen.size>5000)seen.delete(seen.values().next().value);
  const get=s=>el.querySelector(s)?.textContent?.trim()||'';
- const emojis=Array.from(el.querySelectorAll('#message img')).map(i=>({url:i.src,alt:i.alt||''}));
+ const emojis=Array.from(el.querySelectorAll('#message img, #sticker img')).map(i=>({url:i.src,alt:i.alt||''}));
  const msg=el.querySelector('#message');const text=msg?Array.from(msg.childNodes).map(n=>n.nodeType===1&&n.tagName==='IMG'?n.alt:n.textContent).join(''):get('#header-subtext');
  const tag=el.tagName.toLowerCase();const label=get('#purchase-amount')||get('#header-subtext');
  globalThis.__castQueue.push({id,userId:el.getAttribute('author-external-channel-id')||get('#author-name'),username:get('#author-name'),text,emojis,gift:tag.includes('paid')?{kind:tag.includes('sticker')?'sticker':'superchat',label}:tag.includes('membership')?{kind:'membership',label}:undefined});
@@ -39,5 +39,5 @@ export class YouTubeProvider implements ICommentProvider {
    for(const r of rows)if(typeof r.id==='string'&&typeof r.text==='string')emit({...r,gift:r.gift?{...r.gift,...parseMoney(r.gift.label)}:undefined,id:`youtube:${r.id}`,connectionId:config.id,platform:'youtube',timestamp:new Date().toISOString()});
   }catch(e){status(`取得エラー: ${String(e)}`);}finally{this.busy=false;}},750);
  }
- disconnect(){if(this.timer)clearInterval(this.timer);this.timer=undefined;this.win?.destroy();this.win=undefined;}
+ disconnect(){if(this.timer)clearInterval(this.timer);this.timer=undefined;if(this.win&&!this.win.isDestroyed())this.win.destroy();this.win=undefined;}
 }

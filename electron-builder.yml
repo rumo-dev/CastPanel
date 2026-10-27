@@ -5,6 +5,7 @@ directories:
 files:
   - dist/**/*
   - package.json
+  - vendor/sanka/**/*
 asar: true
 win:
   target: nsis
@@ -17,3 +18,5 @@ publish:
   provider: github
   owner: REPLACE_OWNER
   repo: REPLACE_REPO
+
+

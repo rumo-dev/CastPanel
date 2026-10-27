@@ -20,5 +20,5 @@ export class TwitchProvider implements ICommentProvider {
    ws.on('error',e=>status(`IRCエラー: ${e.message}`));ws.on('close',()=>{if(!this.stopped){status('再接続待機');this.retry=setTimeout(start,5000);}});
   };start();
  }
- disconnect(){this.stopped=true;if(this.retry)clearTimeout(this.retry);this.socket?.close();}
+ disconnect(){this.stopped=true;if(this.retry)clearTimeout(this.retry);this.socket?.terminate();}
 }

@@ -2,13 +2,21 @@ import Store from 'electron-store';
 import { mkdir,appendFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { Comment,Listener,Settings } from '../shared/types';
+import { emptyStudio,studioSchema,settingsSchema,type Studio } from '../shared/studio';
+import { z } from 'zod';
+import { recordListener } from '../shared/listener';
 export const defaults:Settings={connections:[{id:'youtube',platform:'youtube',target:'',connect:false,tts:false,tracking:true,export:false},{id:'twitch',platform:'twitch',target:'',connect:false,tts:false,tracking:true,export:false}],theme:'dark',ngWords:[],filterMode:'mask',replacements:{www:'わらわら',URL:'ユーアールエル'},ttsEngine:'speech',speaker:0};
 export class Repository {
- private store=new Store<{settings:Settings;listeners:Record<string,Listener>}>({defaults:{settings:defaults,listeners:{}}});
+ private store=new Store<{settings:Settings;listeners:Record<string,Listener>;studio:Studio}>({defaults:{settings:defaults,listeners:{},studio:emptyStudio()}});
+ get studio(){return studioSchema.parse(this.store.get('studio'));} set studio(value:Studio){this.store.set('studio',value);}
  get settings(){return this.store.get('settings');} set settings(value:Settings){this.store.set('settings',value);}
  get listeners(){return this.store.get('listeners');}
- track(c:Comment){const db=this.listeners;const key=`${c.platform}:${c.userId}`;const old=db[key];c.firstVisit=!old;db[key]={firstSeen:old?.firstSeen||c.timestamp,lastSeen:c.timestamp,username:c.username,count:(old?.count||0)+1,gifts:[...(old?.gifts||[]),...(c.gift?[c.gift]:[])].slice(-100)};this.store.set('listeners',db);}
+ export(){return {version:1,settings:this.settings,listeners:this.listeners,studio:this.studio};}
+ validate(input:unknown){const schema=z.object({version:z.literal(1),settings:settingsSchema,listeners:z.record(z.string(),z.object({firstSeen:z.string().datetime(),lastSeen:z.string().datetime(),username:z.string().max(300),count:z.number().int().nonnegative(),gifts:z.array(commentGift).max(100),giftCount:z.number().int().nonnegative().optional(),nameHistory:z.array(z.object({name:z.string().max(300),seenAt:z.string().datetime()})).max(20).optional(),giftTotals:z.record(z.string().max(30),z.number().nonnegative()).optional()})),studio:studioSchema});return schema.parse(input);}
+ restore(input:unknown){const data=this.validate(input);this.store.store={settings:data.settings,listeners:data.listeners,studio:data.studio};}
+ track(c:Comment){const db=this.listeners;const key=`${c.platform}:${c.userId}`;c.firstVisit=!db[key];db[key]=recordListener(db[key],c);this.store.set('listeners',db);}
 }
+const commentGift=z.object({kind:z.enum(['superchat','sticker','membership','bits','subscription','points']),label:z.string().max(1000),amount:z.number().optional(),currency:z.string().optional()});
 export class LogWriter {
  private queue=Promise.resolve();
  constructor(private root:string){}

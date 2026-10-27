@@ -1,18 +1,52 @@
+import { queueDockHTML } from './queue-dock';
 import express from 'express';
 import { createServer } from 'node:http';
 import { WebSocketServer,WebSocket } from 'ws';
 import type { Snapshot } from '../shared/types';
-const html=`<!doctype html><html lang="ja"><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'"><title>CastPanel OBS</title><style>
-body{background:transparent;color:white;font:24px sans-serif;margin:20px}#feed{display:flex;flex-direction:column;gap:10px}.comment{padding:12px 18px;border-radius:12px;background:#182234e8;overflow-wrap:anywhere}.simple .comment{background:#ffffffde;color:#172033}.pop .comment{background:#fa67a8;color:#fff;border:3px solid #fff}.bubble .comment{background:#fff;color:#213047;border-radius:26px 26px 26px 0}.gift{border-left:8px solid #fbbf24}.large{background:#8c2c64}.name{font-weight:bold;margin-right:16px}.first{font-size:16px;color:#38bdf8}#effect{position:fixed;right:20px;top:20px;background:#9e2358;padding:24px;border-radius:18px;display:none}
-</style><div id="feed"></div><div id="effect"></div><script>
-let seen=new Set(),initialized=false,timer;const feed=document.getElementById('feed');function connect(){const ws=new WebSocket('ws://'+location.host+'/ws');ws.onmessage=e=>{const s=JSON.parse(e.data);document.body.className=s.settings.theme;feed.replaceChildren();for(const c of s.comments.slice(-20)){const row=document.createElement('div');row.className='comment'+(c.gift?' gift':'')+((c.gift?.amount||0)>=1000?' large':'');const name=document.createElement('span');name.className='name';name.textContent=c.username;row.append(name);if(c.firstVisit){const b=document.createElement('span');b.className='first';b.textContent='初見 ';row.append(b);}row.append(document.createTextNode(c.text+(c.gift?' 🎁 '+c.gift.label:'')));feed.append(row);if(initialized&&c.gift&&!seen.has(c.id)){const p=document.getElementById('effect');p.textContent=c.username+' 🎉 '+c.gift.label;p.style.display='block';clearTimeout(timer);timer=setTimeout(()=>p.style.display='none',5000);}seen.add(c.id);}if(seen.size>2000)seen=new Set(s.comments.map(c=>c.id));initialized=true;};ws.onclose=()=>setTimeout(connect,2000);}connect();</script></html>`;
-export async function startServer(snapshot:()=>Snapshot,port=11180){
- const app=express();app.use((req,res,next)=>{const host=req.headers.host;if(!host||!['127.0.0.1','localhost'].includes(host.split(':')[0])){res.sendStatus(403);return;}next();});
- app.get('/overlay',(_,res)=>res.type('html').send(html));
- const server=createServer(app);const wss=new WebSocketServer({noServer:true,maxPayload:1024});
- server.on('upgrade',(req,socket,head)=>{const origin=req.headers.origin;if(req.url!=='/ws'||!origin||![`http://127.0.0.1:${port}`,`http://localhost:${port}`].includes(origin)){socket.destroy();return;}wss.handleUpgrade(req,socket,head,ws=>{wss.emit('connection',ws,req);});});
- const payload=()=>JSON.stringify({...snapshot(),listeners:{},settings:{theme:snapshot().settings.theme}});
- wss.on('connection',ws=>ws.send(payload()));
- await new Promise<void>((resolve,reject)=>{server.once('error',reject);server.listen(port,'127.0.0.1',()=>resolve());});
- return {broadcast(){const data=payload();for(const ws of wss.clients)if(ws.readyState===WebSocket.OPEN){if(ws.bufferedAmount>2_000_000)ws.terminate();else ws.send(data);}},close(){for(const ws of wss.clients)ws.terminate();wss.close();server.close();server.closeAllConnections();}};
+import { commandSchema,type StudioCommand } from '../shared/studio';
+import { overlayHTML,sdkJS } from './overlay';
+import { pollCounts,pollIsActive } from '../shared/poll';
+export function publicState(s:Snapshot){
+ const allow=(id:string)=>s.settings.connections.find(c=>c.id===id)?.overlay!==false;
+ const blocked=(c:Snapshot['comments'][number])=>s.studio.profiles[`${c.platform}:${c.userId}`]?.blocked;
+ const clean=(c:Snapshot['comments'][number])=>({...c,nickname:s.studio.profiles[`${c.platform}:${c.userId}`]?.nickname||c.nickname});
+ const poll=s.studio.poll;
+ return {fullQueue:!!s.studio.fullParticipation,customTheme:s.settings.customThemes?.find(t=>t.id===s.settings.obsCustomTheme),theme:s.settings.theme,comments:s.comments.filter(c=>allow(c.connectionId)&&!blocked(c)).map(clean),effects:s.effects,
+  overlay:s.studio.overlay,queueEnabled:s.studio.participation.enabled,pinned:s.studio.pinned&&allow(s.studio.pinned.connectionId)&&!blocked(s.studio.pinned)?clean(s.studio.pinned):null,
+  queue:s.studio.participation.queue.map((e,i)=>({name:e.name,plays:e.plays,team:e.team,playing:i<s.studio.participation.config.slots})),queueConfig:{slots:s.studio.participation.config.slots,limit:s.studio.participation.config.limit},queueAppearance:s.studio.participation.appearance,setlist:s.studio.setlist,
+  poll:poll?{title:poll.title,options:poll.options,active:pollIsActive(poll),counts:pollCounts(poll),correct:pollIsActive(poll)?-1:poll.correct,mode:poll.mode,closesAt:poll.closesAt,endedAt:poll.endedAt,answerPrefix:poll.answerPrefix}:null};
 }
+export interface ServerControl {token:string;command:(c:StudioCommand)=>void;templateRoot?:string;sanka?:import('./sanka').SankaRuntime}
+export async function startServer(snapshot:()=>Snapshot,requestedPort=11280,control?:ServerControl){
+ let port=requestedPort;
+ const app=express();app.disable('x-powered-by');
+ const origins=()=>[`http://127.0.0.1:${port}`,`http://localhost:${port}`];
+ app.use((req,res,next)=>{const host=req.headers.host;const origin=req.headers.origin;if(!host||![`127.0.0.1:${port}`,`localhost:${port}`].includes(host)||origin&&!origins().includes(origin)){res.sendStatus(403);return;}res.setHeader('Cache-Control','no-store');next();});
+ if(control?.sanka)app.use('/sanka',control.sanka.router);
+ app.get('/api/health',(_,res)=>res.json({application:'CastPanel',protocol:1,port}));
+ app.get(['/overlay','/view'],(_,res)=>res.type('html').send(overlayHTML));
+ app.get('/queue-control',(_,res)=>res.type('html').send(queueDockHTML));
+ app.get('/sdk.js',(_,res)=>res.type('js').send(sdkJS));
+ if(control?.templateRoot)app.use('/templates',(req,res,next)=>{res.setHeader('Content-Security-Policy',"default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src data:; frame-ancestors 'none'");next();},express.static(control.templateRoot,{dotfiles:'deny',index:false,redirect:false}));
+ app.get('/api/state',(_,res)=>res.json(publicState(snapshot())));
+ app.get('/api/comments',(_,res)=>res.json(publicState(snapshot()).comments));
+ app.post('/api/command',express.json({limit:'16kb'}),(req,res)=>{if(!control||req.headers.authorization!==`Bearer ${control.token}`){res.sendStatus(401);return;}const parsed=commandSchema.safeParse(req.body);if(!parsed.success){res.status(400).json({error:'Invalid command'});return;}try{control.command(parsed.data);res.json({ok:true});}catch(error){res.status(400).json({error:String(error)});}});
+ const server=createServer(app);const wss=new WebSocketServer({noServer:true,maxPayload:1024});
+ server.on('upgrade',(req,socket,head)=>{const host=req.headers.host;if(!['/ws','/sanka/ws'].includes(req.url||'')||!host||![`127.0.0.1:${port}`,`localhost:${port}`].includes(host)||!req.headers.origin||!origins().includes(req.headers.origin)){socket.destroy();return;}const target=req.url==='/sanka/ws'?control?.sanka?.sockets:wss;if(!target){socket.destroy();return;}target.handleUpgrade(req,socket,head,ws=>target.emit('connection',ws,req));});
+ const payload=()=>JSON.stringify(publicState(snapshot()));wss.on('connection',ws=>ws.send(payload()));
+ try{await new Promise<void>((resolve,reject)=>{const error=(cause:Error)=>reject(cause);server.once('error',error);server.listen(requestedPort,'127.0.0.1',()=>{server.removeListener('error',error);resolve();});});}catch(error){wss.close();server.close();throw error;}
+ const address=server.address();if(!address||typeof address==='string')throw Error('OBSサーバーのポートを取得できません');port=address.port;
+ return {port,baseUrl:`http://127.0.0.1:${port}`,overlayUrl:`http://127.0.0.1:${port}/overlay`,broadcast(){const data=payload();for(const ws of wss.clients)if(ws.readyState===WebSocket.OPEN){if(ws.bufferedAmount>2_000_000)ws.terminate();else ws.send(data);}},close(){for(const ws of wss.clients)ws.terminate();wss.close();server.close();server.closeAllConnections();}};
+}
+export async function startOverlayServer(snapshot:()=>Snapshot,control?:ServerControl,preferredPort=11280,fallbackPorts=[11280,11281,11282,11283,11284,0]){
+ let lastError:unknown;
+ for(const port of new Set([preferredPort,...fallbackPorts])){
+  try{return await startServer(snapshot,port,control);}catch(error){lastError=error;if(!['EADDRINUSE','EACCES'].includes((error as NodeJS.ErrnoException).code||''))throw error;}
+ }
+ throw lastError||Error('OBSサーバーを開始できません');
+}
+
+
+
+
+
