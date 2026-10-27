@@ -3,6 +3,15 @@ on:
   push:
     tags: ['v*']
   workflow_dispatch:
+    inputs:
+      publish:
+        description: Upload artifacts to the version's Release (existing visibility is preserved)
+        type: boolean
+        default: false
+      release_tag:
+        description: Release tag matching package.json, required when uploading
+        type: string
+        default: ''
 concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
@@ -15,6 +24,8 @@ jobs:
       matrix:
         os: [windows-latest, macos-latest, ubuntu-latest]
     runs-on: ${{ matrix.os }}
+    env:
+      RELEASE_TAG: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || inputs.release_tag }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -23,25 +34,12 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run check:release
-        env:
-          RELEASE_TAG: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || '' }}
       - run: npm test
       - run: node website/scripts/check.mjs
       - run: npm run build
-      - name: Package without publishing (manual rehearsal)
-        if: github.event_name == 'workflow_dispatch'
-        run: npx electron-builder --publish never
+      - name: Package artifacts (no automatic publishing)
+        run: node scripts/package-ci.mjs
         env:
-          CSC_LINK: ${{ runner.os == 'Windows' && secrets.WIN_CSC_LINK || runner.os == 'macOS' && secrets.MAC_CSC_LINK || '' }}
-          CSC_KEY_PASSWORD: ${{ runner.os == 'Windows' && secrets.WIN_CSC_KEY_PASSWORD || runner.os == 'macOS' && secrets.MAC_CSC_KEY_PASSWORD || '' }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-      - name: Package draft release (version tag)
-        if: github.event_name == 'push'
-        run: npx electron-builder --publish always
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_LINK: ${{ runner.os == 'Windows' && secrets.WIN_CSC_LINK || runner.os == 'macOS' && secrets.MAC_CSC_LINK || '' }}
           CSC_KEY_PASSWORD: ${{ runner.os == 'Windows' && secrets.WIN_CSC_KEY_PASSWORD || runner.os == 'macOS' && secrets.MAC_CSC_KEY_PASSWORD || '' }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
@@ -59,3 +57,8 @@ jobs:
             release/*.blockmap
             release/latest*.yml
           if-no-files-found: error
+      - name: Upload to GitHub Release
+        if: github.event_name == 'push' || inputs.publish
+        run: node scripts/publish-release.mjs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

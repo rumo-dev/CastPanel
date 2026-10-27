@@ -35,13 +35,16 @@
 - electron-builder v26署名: https://www.electron.build/v26/docs/features/code-signing/
 - HTML-in-Canvas: https://developer.chrome.com/docs/web-platform/html-in-canvas/2d
 
-現時点では実際のGitHub Releaseの作成・公開、証明書の取得、署名済み配布版からの更新試験は行っていません。
+証明書の取得、署名済み配布版からの更新試験は別途必要です。
 
 ## 0.5.0の準備
 
 - リリース本文: `docs/releases/v0.5.0.md`。electron-builderが配布メタデータとdraft Release用に参照します。
 - バージョンは `package.json`・lockfile・`website/dist/config.js`・`releaseNotesFile` を揃えます。`npm run check:release` が不一致を検出します。
-- Actionsの **Release → Run workflow** は3 OSで `--publish never` を実行する事前ビルドです。成果物は各ジョブのArtifactsから取得できます。手動実行ではタグやGitHub Releaseを作成しません。
+- Actionsの **Release → Run workflow** は標準で3 OSの事前ビルドです。成果物は各ジョブのArtifactsから取得できます。`publish` がOFFならGitHub Releaseへアップロードしません。
+- 既存Releaseへ再アップロードする場合は、修正済みmainから `publish` をON、`release_tag` を `v0.5.0` にして実行します。バージョン一致を確認し、既存Releaseの公開／下書き状態を保ったまま成果物を追加・置換します。既存タグの上書きは不要です。
+- 新しいタグのpushでは、Releaseがなければ下書きを作成します。既に公開済みの場合もファイルをアップロードできます。electron-builderの `releaseType: draft` による既存公開版へのアップロード見送りを避けるため、ビルドとアップロードを分離しています。
+- 未登録の署名Secretsはビルド環境から取り除きます。証明書未登録でも未署名の成果物を生成できますが、macOSの一般配布・自動更新には署名・公証が必要です。
 - 正式なリリース準備が整ったコミットに `v0.5.0` タグを付けてpushするとdraft Releaseを生成します。`git tag v0.5.0` → `git push origin v0.5.0`。既存のタグを上書きしないでください。
 - draftの確認後、GitHub Releaseへこのリリース本文を設定し、Publish releaseで公開します。公開後にGitHub Pagesのダウンロード欄と旧版からの更新を確認します。
 - `build.bat` はローカルWindowsビルド専用で、公開しません。既存の実行中ビルドと出力先を分けたい場合は `npm exec -- electron-builder --win --publish never --config.directories.output=release-0.5.0` を使います。
