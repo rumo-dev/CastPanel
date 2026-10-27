@@ -1,0 +1,1 @@
+export const config={owner:'rumo-dev',repository:'CastPanel',developmentVersion:'0.2.0',releaseApi:'https://api.github.com/repos/rumo-dev/CastPanel/releases/latest',releasesUrl:'https://github.com/rumo-dev/CastPanel/releases'};

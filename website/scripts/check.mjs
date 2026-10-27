@@ -1,0 +1,11 @@
+import { readFile,access } from 'node:fs/promises';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../dist');
+const html=await readFile(path.join(root,'index.html'),'utf8');
+for(const file of ['style.css','app.js','config.js','assets/castpanel-icon.png','favicon.png'])await access(path.join(root,file));
+for(const id of ['features','workflow','download','faq','demo-surface'])if(!html.includes('id="'+id+'"'))throw Error('Missing section '+id);
+const js=await readFile(path.join(root,'app.js'),'utf8');
+for(const api of ['drawElementImage','requestPaint','drawable','layoutsubtree'])if(!js.includes(api))throw Error('Missing HTML-in-Canvas API '+api);
+if(!js.includes("host.dataset.rendering='dom'"))throw Error('Missing DOM fallback');
+console.log('Site assets, navigation and native Canvas/fallback paths verified.');

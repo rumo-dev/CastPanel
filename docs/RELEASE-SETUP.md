@@ -15,7 +15,7 @@
 3. **Windows署名（一般配布では推奨）**。現在のelectron-builder v26に合うコード署名証明書または対応するクラウド署名環境を用意します。ファイル証明書を使用できる方式なら `CSC_LINK`・`CSC_KEY_PASSWORD`、クラウド／HSM方式ならそのプロバイダー用のCI設定が必要です。証明書・秘密鍵はチャットやリポジトリに置かずSecretsへ登録してください。
 4. **macOS署名・公証（macOS配布・自動更新用）**。Apple Developer Program、Developer ID証明書、`CSC_LINK`・`CSC_KEY_PASSWORD`、`APPLE_ID`・`APPLE_APP_SPECIFIC_PASSWORD`・`APPLE_TEAM_ID` などを用意します。WindowsとmacOSで証明書が異なる場合はOS別のSecretsを使うようworkflowのenvを分けてください。公証設定は使用する証明書・プロファイルに合わせて追加します。
 5. **各OSの実機確認**。Windows NSIS、macOS DMG＋ZIP、Linux AppImageと、それぞれの更新メタデータを確認します。Windowsのwin-unpackedフォルダーは配布インストーラーの代わりにはしません。
-6. **配布サイトの公開設定**。Sitesで作成したページは初期状態で非公開です。一般ユーザー向けには公開範囲を変更するか、`website/dist/` を任意の静的ホストへ公開します。独自ドメインは任意です。
+6. **配布サイトの公開設定**。GitHubの Settings → Pages → Source を **GitHub Actions** に設定します。mainへサイトをpushすると `.github/workflows/pages.yml` が `website/dist/` を公開します。公開先は `https://rumo-dev.github.io/CastPanel/` です。詳しくは `website/README.md` を参照してください。独自ドメインは任意です。
 
 ## リリース手順
 
