@@ -1,0 +1,19 @@
+appId: jp.castpanel.desktop
+productName: CastPanel
+directories:
+  output: release
+files:
+  - dist/**/*
+  - package.json
+asar: true
+win:
+  target: nsis
+mac:
+  target: [dmg, zip]
+  category: public.app-category.entertainment
+linux:
+  target: AppImage
+publish:
+  provider: github
+  owner: REPLACE_OWNER
+  repo: REPLACE_REPO

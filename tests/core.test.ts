@@ -1,0 +1,10 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {filterComment,speechText} from '../src/shared/filter';
+import {parseIRC} from '../src/main/providers/twitch';
+import type {Comment,Settings} from '../src/shared/types';
+import {parseMoney} from '../src/shared/gift';
+test('gift amounts preserve uncertain currency labels',()=>{assert.deepEqual(parseMoney('¥1,000'),{amount:1000,currency:'JPY'});assert.deepEqual(parseMoney('US$ 1.99'),{amount:1.99,currency:'USD'});assert.deepEqual(parseMoney('$1,000'),{});});
+const c:Comment={id:'1',connectionId:'a',platform:'twitch',userId:'u',username:'U',text:'bad www',timestamp:'2026-01-01',emojis:[]};
+test('NG mask/hide and literal replacements',()=>{const s={ngWords:['bad'],filterMode:'mask'} as Settings;assert.equal(filterComment(c,s)?.text,'＊＊＊ www');assert.equal(filterComment(c,{...s,filterMode:'hide'}),null);assert.equal(speechText('www URL',{'www':'わら','URL':'ユーアールエル'}),'わら ユーアールエル');assert.equal(c.text,'bad www');});
+test('IRC preserves tag escapes, message and bits',()=>{const r=parseIRC('@display-name=Test\\sUser;bits=100;id=abc :user!user@host PRIVMSG #room :cheer100 hello');assert.equal(r?.tags['display-name'],'Test User');assert.equal(r?.tags.bits,'100');assert.equal(r?.text,'cheer100 hello');assert.equal(r?.command,'PRIVMSG');assert.equal(parseIRC('???'),null);});
