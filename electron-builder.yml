@@ -9,6 +9,8 @@ files:
   - build/icon.png
   - vendor/sanka/**/*
 asar: true
+releaseInfo:
+  releaseNotesFile: docs/releases/v0.5.0.md
 win:
   icon: build/icon.ico
   target: nsis

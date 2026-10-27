@@ -30,6 +30,8 @@ if not exist "node_modules\" (
 )
 
 echo [2/3] Checking types and building application...
+call npm.cmd run check:release
+if errorlevel 1 goto failure
 call npm.cmd run build
 if errorlevel 1 goto failure
 if /i "%~1"=="--build-only" goto built
