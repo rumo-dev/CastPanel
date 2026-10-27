@@ -39,3 +39,4 @@ html[data-app-theme=retro] button,html[data-app-theme=retro] .item{border-radius
 .detached-panel .connections,.detached-panel .workspace-nav,.detached-panel .app-header .brand-caption,.detached-panel .app-header .header-status,.detached-panel .app-header nav,.detached-panel .app-header .app-theme-picker{display:none}.detached-panel .app-header{height:45px;min-height:45px}.detached-panel .tool-content{max-width:none;padding:16px}.detached-panel .header-actions .button{font-size:10px}.app-shell .item,.app-shell .panel,.app-shell .queue-row,button{border-radius:var(--user-radius,7px);border-width:var(--user-border,1px)}
 .app-shell .tool-content input[type=color]{height:38px;min-width:48px;padding:3px;cursor:pointer}
 .detached-panel .header-actions>.button:first-child{display:none}
+.brand-icon{width:34px;height:34px;object-fit:contain;flex:none}.app-brand h1{letter-spacing:-.6px}

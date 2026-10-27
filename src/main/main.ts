@@ -1,3 +1,4 @@
+import { appIcon } from './branding';
 import { SankaRuntime } from './sanka';
 import { panelSchema,panelNames,type Panel } from '../shared/windows';
 import { themeFileSchema,customThemeSchema } from '../shared/custom-themes';
@@ -27,6 +28,7 @@ import { expirePoll,formatTimestamp } from '../shared/poll';
 import { WindowPlacement } from './window-state';
 
 const { autoUpdater } = updater;
+if(process.platform==='win32')app.setAppUserModelId('jp.castpanel.desktop');
 const dir=path.dirname(fileURLToPath(import.meta.url));
 let win:BrowserWindow;
 let sanka:SankaRuntime;const popouts=new Map<Panel,BrowserWindow>();const trustedWindows=new Set<BrowserWindow>();
@@ -98,19 +100,19 @@ async function reconcile(){const version=++reconcileVersion;
 function saveSettings(value:Settings){saving=saving.catch(()=>{}).then(async()=>{if(closing)return;repo.settings=value;sanka?.refresh();await reconcile();publish();});return saving;}
 function createWindow(){
  const placement=windowPlacement.restore();
- win=new BrowserWindow({...placement.bounds,minWidth:placement.minWidth,minHeight:placement.minHeight,webPreferences:{preload:path.join(dir,'../preload/index.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true}});
+ win=new BrowserWindow({icon:appIcon,...placement.bounds,minWidth:placement.minWidth,minHeight:placement.minHeight,webPreferences:{preload:path.join(dir,'../preload/index.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true}});
  trustedWindows.add(win);
  if(placement.maximized)win.maximize();windowPlacement.track(win);
  win.on('close',()=>{if(!closing)app.quit();});
  win.webContents.setWindowOpenHandler(()=>({action:'deny'}));win.webContents.on('will-navigate',event=>event.preventDefault());
  if(process.env.ELECTRON_RENDERER_URL)void win.loadURL(process.env.ELECTRON_RENDERER_URL);else void win.loadFile(path.join(dir,'../renderer/index.html'));
 }
-async function openPopout(panel:Panel){const old=popouts.get(panel);if(old&&!old.isDestroyed()){old.show();old.focus();return;}const w=new BrowserWindow({width:1000,height:760,minWidth:400,minHeight:300,title:'CastPanel — '+panelNames[panel],webPreferences:{preload:path.join(dir,'../preload/index.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true}});popouts.set(panel,w);trustedWindows.add(w);w.setMenu(null);w.webContents.setWindowOpenHandler(()=>({action:'deny'}));w.webContents.on('will-navigate',e=>e.preventDefault());w.on('closed',()=>{trustedWindows.delete(w);popouts.delete(panel);});if(process.env.ELECTRON_RENDERER_URL){const url=new URL(process.env.ELECTRON_RENDERER_URL);url.searchParams.set('panel',panel);await w.loadURL(url.href);}else await w.loadFile(path.join(dir,'../renderer/index.html'),{query:{panel}});}
+async function openPopout(panel:Panel){const old=popouts.get(panel);if(old&&!old.isDestroyed()){old.show();old.focus();return;}const w=new BrowserWindow({icon:appIcon,width:1000,height:760,minWidth:400,minHeight:300,title:'CastPanel — '+panelNames[panel],webPreferences:{preload:path.join(dir,'../preload/index.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true}});popouts.set(panel,w);trustedWindows.add(w);w.setMenu(null);w.webContents.setWindowOpenHandler(()=>({action:'deny'}));w.webContents.on('will-navigate',e=>e.preventDefault());w.on('closed',()=>{trustedWindows.delete(w);popouts.delete(panel);});if(process.env.ELECTRON_RENDERER_URL){const url=new URL(process.env.ELECTRON_RENDERER_URL);url.searchParams.set('panel',panel);await w.loadURL(url.href);}else await w.loadFile(path.join(dir,'../renderer/index.html'),{query:{panel}});}
 function login(id:string){
  const config=repo.settings.connections.find(c=>c.id===id);if(!config)throw Error('接続先がありません');
  const youtube=config.platform==='youtube';const twitch=config.platform==='twitch';
  const hosts=youtube?['www.youtube.com','accounts.google.com']:twitch?['www.twitch.tv','passport.twitch.tv','id.twitch.tv']:['twitcasting.tv','ssl.twitcasting.tv','twitter.com','x.com','api.twitter.com'];
- const browser=new BrowserWindow({width:1000,height:800,title:'配信サイトへのログイン',webPreferences:{partition:`persist:${config.platform}`,sandbox:true,contextIsolation:true,nodeIntegration:false}});
+ const browser=new BrowserWindow({icon:appIcon,width:1000,height:800,title:'配信サイトへのログイン',webPreferences:{partition:`persist:${config.platform}`,sandbox:true,contextIsolation:true,nodeIntegration:false}});
  browser.webContents.setWindowOpenHandler(()=>({action:'deny'}));
  browser.webContents.on('will-navigate',(event,url)=>{try{const target=new URL(url);if(target.protocol!=='https:'||!hosts.includes(target.hostname))event.preventDefault();}catch{event.preventDefault();}});
  return browser.loadURL(youtube?'https://www.youtube.com/':twitch?'https://www.twitch.tv/login':'https://twitcasting.tv/login');
@@ -154,6 +156,7 @@ if(!app.requestSingleInstanceLock())app.quit();else {
  app.on('second-instance',()=>{if(win&&!win.isDestroyed()){win.show();win.focus();}});
  app.on('before-quit',shutdown);app.on('window-all-closed',()=>{if(!closing)app.quit();});
  void app.whenReady().then(async()=>{
+  if(process.platform==='darwin')app.dock?.setIcon(appIcon);
   const root=app.getPath('userData');repo=new Repository();windowPlacement=new WindowPlacement();logs=new LogWriter(path.join(root,'logs'));archive=new Archive(path.join(root,'logs'));backups=new Backups(path.join(root,'backups'));
   sanka=new SankaRuntime(repo,publish,controlToken,()=>{void reconcile();},action=>action==='themes'?openPopout('themes'):action==='install'?autoUpdater.quitAndInstall():autoUpdater.checkForUpdates());
   await archive.importLegacy().catch(console.error);
@@ -169,6 +172,7 @@ if(!app.requestSingleInstanceLock())app.quit();else {
   if(overlay)sanka.setBase(overlay.baseUrl);void sanka.start();registerIPC();createWindow();schedulePollDeadline();await reconcile();if(!closing&&app.isPackaged&&sanka.autoUpdates())void autoUpdater.checkForUpdates().catch(()=>{});
  }).catch(error=>{console.error(error);app.quit();});
 }
+
 
 
 

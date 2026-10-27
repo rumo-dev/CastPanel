@@ -1,22 +1,30 @@
 appId: jp.castpanel.desktop
 productName: CastPanel
+artifactName: CastPanel-${version}-${os}-${arch}.${ext}
 directories:
   output: release
 files:
   - dist/**/*
   - package.json
+  - build/icon.png
   - vendor/sanka/**/*
 asar: true
 win:
+  icon: build/icon.ico
   target: nsis
 mac:
+  icon: build/icon.icns
   target: [dmg, zip]
   category: public.app-category.entertainment
 linux:
+  icon: build/icons
   target: AppImage
 publish:
   provider: github
-  owner: REPLACE_OWNER
-  repo: REPLACE_REPO
+  owner: rumo-dev
+  repo: CastPanel
+  releaseType: draft
+
+
 
 
